@@ -1,0 +1,17 @@
+{
+  "canisters": {
+    "Markets_backend": {
+      "candid": "src/Markets_backend/Markets_backend.did",
+      "package": "Markets_backend",
+      "type": "rust"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
