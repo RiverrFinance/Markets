@@ -1,8 +1,8 @@
 {
   "canisters": {
-    "Markets_backend": {
-      "candid": "src/Markets_backend/Markets_backend.did",
-      "package": "Markets_backend",
+    "market": {
+      "candid": "market.did",
+      "package": "market",
       "type": "rust"
     }
   },
