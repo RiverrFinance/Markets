@@ -10,7 +10,7 @@ use crate::{
     types::{Asset, AssetClass, MarketDetails, StateDetails, Tick},
     Amount, // OrderType, PositionDetails,
     OrderType,
-    PositionDetails,
+    PositionParameters,
     Subaccount,
 };
 
@@ -31,12 +31,13 @@ thread_local! {
 fn _open_position(
     pic: &PocketIc,
     principal: Principal,
+    _account_index: u8,
     collateral: Amount,
     long: bool,
     order_type: OrderType,
     leverage: u8,
     max_tick: Option<Tick>,
-) -> Result<PositionDetails, String> {
+) -> Result<PositionParameters, String> {
     let canister_id = _get_canister_id();
 
     let returns;
@@ -45,7 +46,17 @@ fn _open_position(
         canister_id,
         principal,
         "openPosition",
-        encode_args((collateral, long, order_type, leverage, max_tick, 1u64, 1u64)).unwrap(),
+        encode_args((
+            _account_index,
+            collateral,
+            long,
+            order_type,
+            leverage,
+            max_tick,
+            1u64,
+            1u64,
+        ))
+        .unwrap(),
     ) {
         Ok(reply) => {
             if let WasmResult::Reply(val) = reply {
@@ -65,7 +76,7 @@ fn _open_position(
     return reply;
 }
 
-fn _close_position(pic: &PocketIc, sender: Principal) -> u128 {
+fn _close_position(pic: &PocketIc, sender: Principal, _account_index: u8) -> u128 {
     let canister_id = _get_canister_id();
 
     let max_tick: Option<Tick> = Option::None;
@@ -73,7 +84,7 @@ fn _close_position(pic: &PocketIc, sender: Principal) -> u128 {
         canister_id,
         sender,
         "closePosition",
-        encode_one(max_tick).unwrap(),
+        encode_args((_account_index, max_tick)).unwrap(),
     ) else {
         return 1234567890;
     };
@@ -99,8 +110,7 @@ fn _get_state(pic: &PocketIc) -> StateDetails {
     decode_one(&val).unwrap()
 }
 
-fn _get_position_status(pic: &PocketIc, user: Principal) -> (bool, bool) {
-    let subaccount = _get_user_account(pic, user);
+fn _get_position_status(pic: &PocketIc, subaccount: Subaccount) -> (bool, bool) {
     let canister_id = _get_canister_id();
     let Ok(WasmResult::Reply(val)) = pic.query_call(
         canister_id,
@@ -116,45 +126,61 @@ fn _get_position_status(pic: &PocketIc, user: Principal) -> (bool, bool) {
     return reply;
 }
 
-fn _get_best_offer(pic: &PocketIc, buy: bool) -> Tick {
+pub fn _get_best_offers(pic: &PocketIc) -> Result<(Tick, Tick), String> {
     let canister_id = _get_canister_id();
-    let Ok(WasmResult::Reply(val)) = pic.query_call(
+
+    let returns;
+
+    match pic.query_call(
         canister_id,
         Principal::anonymous(),
-        "getBestOfferTick",
-        encode_one(buy).unwrap(),
-    ) else {
-        panic!("best offer could not be found")
-    };
-    let reply = decode_one(&val).unwrap();
+        "getBestOffers",
+        encode_one(()).unwrap(),
+    ) {
+        Ok(reply) => {
+            if let WasmResult::Reply(val) = reply {
+                returns = val
+            } else {
+                return Err(String::from("error occured in canister "));
+            }
+        }
+        Err(error) => {
+            println!("this error occured at pocket ic {:?}", error);
+            return Err(String::from(
+                "error getting best offers occured at pocket ic ",
+            ));
+        }
+    }
 
-    return reply;
+    let reply = decode_args(&returns).unwrap();
+
+    return Ok(reply);
 }
 
-/// Get Position PNL
-fn _get_pnl(pic: &PocketIc, account: Subaccount) -> i64 {
-    let canister_id = _get_canister_id();
-    let Ok(WasmResult::Reply(val)) = pic.query_call(
-        canister_id,
-        Principal::anonymous(),
-        "getPositionPNL",
-        encode_one(account).unwrap(),
-    ) else {
-        panic!("Account could not be gotten")
-    };
-    let reply = decode_one(&val).unwrap();
+// /// Get Position PNL
+// fn _get_pnl(pic: &PocketIc, account: Subaccount) -> i64 {
+//     let canister_id = _get_canister_id();
+//     let Ok(WasmResult::Reply(val)) = pic.query_call(
+//         canister_id,
+//         Principal::anonymous(),
+//         "getPositionPNL",
+//         encode_one(account).unwrap(),
+//     ) else {
+//         panic!("Account could not be gotten")
+//     };
+//     let reply = decode_one(&val).unwrap();
 
-    return reply;
-}
+//     return reply;
+// }
 
 /// Get Position Status
-fn _get_user_account(pic: &PocketIc, principal: Principal) -> Subaccount {
+fn _get_user_account(pic: &PocketIc, principal: Principal, index: u8) -> Subaccount {
     let canister_id = _get_canister_id();
     let Ok(WasmResult::Reply(val)) = pic.query_call(
         canister_id,
         principal,
         "getUserAccount",
-        encode_one(principal).unwrap(),
+        encode_args((principal, index)).unwrap(),
     ) else {
         panic!("Account could not be gotten")
     };
@@ -164,7 +190,7 @@ fn _get_user_account(pic: &PocketIc, principal: Principal) -> Subaccount {
 }
 
 /// Get Account Position
-fn _get_account_position(pic: &PocketIc, account: Subaccount) -> PositionDetails {
+fn _get_account_position(pic: &PocketIc, account: Subaccount) -> PositionParameters {
     let canister_id = _get_canister_id();
     let Ok(WasmResult::Reply(val)) = pic.query_call(
         canister_id,
@@ -267,4 +293,5 @@ fn _set_canister_id(id: Principal) {
     CANISTER_ID.with_borrow_mut(|reference| *reference = id)
 }
 
+pub mod close_position_test;
 pub mod open_position_test;
