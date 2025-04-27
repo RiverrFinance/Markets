@@ -15,7 +15,6 @@ type LiquidityBoundary = record {
 };
 type MarketDetails = record {
   vault_id : principal;
-  collateral_decimal : nat8;
   quote_asset : Asset;
   base_asset : Asset;
   xrc_id : principal;
@@ -51,7 +50,7 @@ type TickState = variant { BUY; SELL };
 service : (MarketDetails) -> {
   closePosition : (nat8, opt nat64) -> (nat);
   getAccountPositionDetails : (principal, nat8) -> (
-      opt record { PositionParameters; PositionStatus },
+      opt record { PositionParameters; PositionStatus; int64 },
     ) query;
   getBestOffers : () -> (nat64, nat64) query;
   getMarketDetails : () -> (MarketDetails) query;

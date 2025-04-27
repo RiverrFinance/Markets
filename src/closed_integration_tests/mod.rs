@@ -258,7 +258,6 @@ fn _setup_market(admin: Principal) -> PocketIc {
         },
         xrc_id: admin,
         vault_id: admin,
-        collateral_decimal: 1,
     };
 
     pic.install_canister(

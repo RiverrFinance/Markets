@@ -157,12 +157,28 @@ fn get_tick_details(tick: Tick) -> TickDetails {
 fn get_account_position_details(
     user: Principal,
     account_index: u8,
-) -> Option<(PositionParameters, PositionStatus)> {
+) -> Option<(PositionParameters, PositionStatus, i64)> {
     let account = user._to_subaccount(account_index);
     match _get_account_position(&account) {
         Some(position_params) => {
             let position_status = _convert_account_limit_position_to_market(account);
-            return Some((position_params, position_status));
+
+            let StateDetails {
+                max_leveragex10, ..
+            } = _get_state_details();
+
+            let initial_collateral = position_params.collateral_value as i128;
+
+            let (to_liquidate, current_collateral_int, _) =
+                _liquidation_status(position_params, max_leveragex10);
+
+            let pnl = if to_liquidate {
+                -100 * _ONE_PERCENT as i64
+            } else {
+                (((current_collateral_int - initial_collateral) * 100 * _ONE_PERCENT as i128)
+                    / initial_collateral) as i64
+            };
+            return Some((position_params, position_status, pnl));
         }
         None => return None,
     }
@@ -355,6 +371,7 @@ async fn close_position(account_index: u8, max_tick: Option<Tick>) -> Amount {
             let (removed_collateral, manage_debt_params) = if position.long {
                 _close_limit_long_position(account, &mut position)
             } else {
+                update_current_tick();
                 _close_limit_short_position(account, &mut position)
             };
 
@@ -1162,7 +1179,7 @@ fn _liquidation_status(position: PositionParameters, max_leveragex10: u8) -> (bo
             _percentage(pnl_in_percentage.abs() as u64, initial_position_value);
 
         let current_collateral_value = if pnl_in_percentage >= 0 {
-            ((initial_position_value + position_profit_or_loss) - net_debt_value) as i128
+            (initial_position_value + position_profit_or_loss) as i128 - (net_debt_value) as i128
         } else {
             (initial_position_value as i128) - (position_profit_or_loss + net_debt_value) as i128
         };
@@ -1170,12 +1187,13 @@ fn _liquidation_status(position: PositionParameters, max_leveragex10: u8) -> (bo
         let current_leverage_x10 =
             ((net_debt_value as i128 + current_collateral_value) * 10) / current_collateral_value;
 
-        let to_liquidate = current_leverage_x10.abs() as u8 >= max_leveragex10;
+        let to_liquidate =
+            current_collateral_value < 0 || current_leverage_x10.abs() as u8 >= max_leveragex10;
 
         return (to_liquidate, current_collateral_value, net_debt_value);
     }
 
-    return (false, 0, 0);
+    return (false, position.collateral_value as i128, 0);
 }
 
 /// Opens Order Functions
@@ -1877,11 +1895,6 @@ impl Retrying for PositionUpdateErrorLog {
         if let Ok(()) = call.oneway() {
             return;
         };
-        // let _ = ic_cdk::call::unbounded(
-        //     details.vault_id,
-        //     "managePositionUpdate",
-        //     (self.user, self.profit, self.debt_params),
-        // );
     }
 }
 
@@ -1981,7 +1994,7 @@ impl Vault {
             .with_args(&(user, collateral, debt));
 
         if let Ok(response) = call.await {
-            return response.candid_tuple().unwrap();
+            return response.candid_tuple().unwrap_or((false, 0));
         } else {
             return (false, 0);
         }

@@ -221,9 +221,6 @@ pub struct MarketDetails {
     pub vault_id: Principal,
 
     pub xrc_id: Principal,
-
-    /// token decimal of collateral token
-    pub collateral_decimal: u8,
 }
 
 impl Default for MarketDetails {
@@ -233,7 +230,6 @@ impl Default for MarketDetails {
             quote_asset: Asset::default(),
             vault_id: Principal::anonymous(),
             xrc_id: Principal::anonymous(),
-            collateral_decimal: 0,
         };
     }
 }
