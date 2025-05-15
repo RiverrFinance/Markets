@@ -63,15 +63,13 @@ pub fn _get_best_offer<'a>(
             TickState::BUY => buy == false,
         };
 
-        let liquidity_boundary = tick_details.liq_bounds;
-
-        if liquidity_boundary._liquidity_within() > 0 && right_direction {
+        if right_direction {
             resulting_tick = loop_current_tick;
             break;
         }
 
         let next_initialised_tick =
-            _next_initialised_tick(bitmap, integral, bit_position, tick_spacing, buy);
+            _next_initialised_tick(bitmap, bit_position, integral, tick_spacing, buy);
 
         loop_current_tick = next_initialised_tick;
     }
@@ -220,7 +218,7 @@ impl<'a> SwapParams<'a> {
 
             //println!()
             let next_initialised_tick =
-                _next_initialised_tick(bitmap, integral, bit_position, self.tick_spacing, self.buy);
+                _next_initialised_tick(bitmap, bit_position, integral, self.tick_spacing, self.buy);
 
             loop_current_tick = next_initialised_tick;
         }
