@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::bitmap_lib::_flip_bit;
 
 use super::price_lib::_equivalent;
-use super::tick_lib::{_int_and_dec, _tick_to_price};
+use super::tick_lib::_int_and_dec;
 
 use candid::CandidType;
 
@@ -27,6 +27,8 @@ pub trait Order {
 ///OpenOrderParams for creating orders
 
 pub struct OpenOrderParams<'a> {
+       /// magnitude of difference in basis point between two neigbouring ticks
+    pub tick_spacing: u64,
     /// Multiplier BitMaps
     ///
     ///A HashMap of  multipliers (percentiles) to their respective bitmap
@@ -49,7 +51,7 @@ impl<'a> OpenOrderParams<'a> {
         let mut tick_details = match self.ticks_details.get(&self.order.ref_tick) {
             Some(details) => details,
             None => {
-                let (integral, bit_position) = _int_and_dec(self.order.ref_tick);
+                let (integral, bit_position) = _int_and_dec(self.order.ref_tick, self.tick_spacing);
                 let map = match self.integrals_bitmaps.get(&integral) {
                     Some(_map) => _map,
                     None => 0,
@@ -71,6 +73,8 @@ impl<'a> OpenOrderParams<'a> {
 ///CloseOrderParams for closing order
 
 pub struct CloseOrderParams<'a> {
+    /// magnitude of difference in basis point between two neigbouring ticks
+    pub tick_spacing: u64,
     ///Order
     ///
     /// An immutable reference  to a  generic type order that implements the Order trait,
@@ -102,7 +106,8 @@ impl<'a> CloseOrderParams<'a> {
                 if tick_details.liq_bounds._liquidity_within() == 0 {
                     self.ticks_details.remove(&self.order.ref_tick);
 
-                    let (integral, bit_position) = _int_and_dec(self.order.ref_tick);
+                    let (integral, bit_position) =
+                        _int_and_dec(self.order.ref_tick, self.tick_spacing);
 
                     if let Some(bitmap) = self.integrals_bitmaps.get(&integral) {
                         let flipped_bitmap = _flip_bit(bitmap, bit_position);
@@ -117,9 +122,9 @@ impl<'a> CloseOrderParams<'a> {
             None => {
                 // if tick details does not exist means all trade order  that currently references that tick
                 //   has been filled
-                let tick_price = _tick_to_price(self.order.ref_tick);
+                //  let tick_price = _tick_to_price(self.order.ref_tick);
                 return (
-                    _equivalent(self.order.order_size, tick_price, self.order.buy),
+                    _equivalent(self.order.order_size, self.order.ref_tick, self.order.buy),
                     0,
                 );
             }
@@ -198,8 +203,9 @@ impl Order for LimitOrder {
     /// i.e base asset(perp asset) for a buy order and quote asset (collateral asset) for a sell order
     /// - Amount Remaining :This  returns the amount  not filled in the order  
     fn _closing_update(&self, tick_details: &mut TickDetails) -> (Amount, Amount) {
-        let tick_price = _tick_to_price(self.ref_tick);
-        let equivalent = |amount: Amount| -> Amount { _equivalent(amount, tick_price, self.buy) };
+        //  let tick_price = _tick_to_price(self.ref_tick);
+        let equivalent =
+            |amount: Amount| -> Amount { _equivalent(amount, self.ref_tick, self.buy) };
 
         // this means order has been filled since tick has been closed before
         if self.init_tick_timestamp < tick_details.created_timestamp {

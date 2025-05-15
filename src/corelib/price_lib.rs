@@ -1,12 +1,17 @@
-use super::constants::_PRICE_DECIMAL;
+use super::constants::_PRICE_FACTOR;
 
 type Amount = u128;
 
-pub fn _equivalent(amount: Amount, price: Amount, buy: bool) -> Amount {
+pub fn _equivalent(amount: Amount, price: u64, buy: bool) -> Amount {
     // unsafe
     if buy {
-        return (amount * _PRICE_DECIMAL) / price;
+        let result = (amount * _PRICE_FACTOR) / price as u128;
+        if result == _equivalent(result, price, false) {
+            return result;
+        } else {
+            return (((amount as f64) / price as f64) * _PRICE_FACTOR as f64) as u128;
+        }
     } else {
-        return (amount * price) / _PRICE_DECIMAL;
+        return (amount * price as u128) / _PRICE_FACTOR;
     }
 }

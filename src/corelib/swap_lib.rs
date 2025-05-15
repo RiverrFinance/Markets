@@ -19,13 +19,14 @@ pub fn _get_best_offer<'a>(
     buy: bool,
     current_tick: Tick,
     stopping_tick: Tick,
+    tick_spacing: u64,
     integrals_bitmaps: &'a mut MB,
     ticks_details: &'a mut TD,
 ) -> Option<Tick> {
     let mut resulting_tick = 0;
     let mut loop_current_tick = current_tick;
     while !(_exceeded_stopping_tick(loop_current_tick, stopping_tick, buy)) {
-        let (integral, bit_position) = _int_and_dec(loop_current_tick);
+        let (integral, bit_position) = _int_and_dec(loop_current_tick, tick_spacing);
         let bitmap = match integrals_bitmaps.get(&integral) {
             Some(res) => res,
             None => {
@@ -37,7 +38,7 @@ pub fn _get_best_offer<'a>(
                 //breaks else
                 // updates current tick to the next default tick
 
-                let next_default_tick = _next_default_tick(integral, buy);
+                let next_default_tick = _next_default_tick(integral, tick_spacing, buy);
 
                 loop_current_tick = next_default_tick;
                 //stops currrent iteration,starts the next at the next default tick
@@ -48,7 +49,7 @@ pub fn _get_best_offer<'a>(
             Some(res) => res,
             None => {
                 let next_initialised_tick =
-                    _next_initialised_tick(bitmap, integral, bit_position, buy);
+                    _next_initialised_tick(bitmap, bit_position, integral, tick_spacing, buy);
 
                 loop_current_tick = next_initialised_tick;
                 continue;
@@ -69,7 +70,8 @@ pub fn _get_best_offer<'a>(
             break;
         }
 
-        let next_initialised_tick = _next_initialised_tick(bitmap, integral, bit_position, buy);
+        let next_initialised_tick =
+            _next_initialised_tick(bitmap, integral, bit_position, tick_spacing, buy);
 
         loop_current_tick = next_initialised_tick;
     }
@@ -106,6 +108,10 @@ pub struct SwapParams<'a> {
     /// This can be viewed as maximum excecution price for a market order
     /// if specified swap does not exceed this and returns the net previous amount from ticks below and the amount remaining
     pub stopping_tick: Tick,
+    /// Tick Spacing
+    ///
+    /// magnitude of difference in basis point between two neigbouring ticks
+    pub tick_spacing: u64,
     /// Order Size
     ///
     /// the amount of asset being swapped
@@ -144,7 +150,7 @@ impl<'a> SwapParams<'a> {
         let mut loop_current_tick = self.init_tick;
 
         while !(_exceeded_stopping_tick(loop_current_tick, self.stopping_tick, self.buy)) {
-            let (integral, bit_position) = _int_and_dec(loop_current_tick);
+            let (integral, bit_position) = _int_and_dec(loop_current_tick, self.tick_spacing);
 
             let bitmap = match self.integrals_bitmaps.get(&integral) {
                 Some(res) => res,
@@ -157,7 +163,8 @@ impl<'a> SwapParams<'a> {
                     //breaks else
                     // updates current tick to the next default tick
 
-                    let next_default_tick = _next_default_tick(integral, self.buy);
+                    let next_default_tick =
+                        _next_default_tick(integral, self.tick_spacing, self.buy);
                     if _exceeded_stopping_tick(next_default_tick, self.stopping_tick, self.buy) {
                         break;
                     };
@@ -195,7 +202,7 @@ impl<'a> SwapParams<'a> {
 
                     let flipped_bitmap = _flip_bit(bitmap, bit_position);
 
-                    let tick_zero = _tick_zero(integral);
+                    let tick_zero = _tick_zero(integral, self.tick_spacing);
                     // if flipping bitmap results in zero and tick zero(see bitmap_lib) is not contained in ticks_details hashmap
                     //delete btimap
                     if flipped_bitmap == 0 && !self.ticks_details.contains_key(&tick_zero) {
@@ -213,7 +220,7 @@ impl<'a> SwapParams<'a> {
 
             //println!()
             let next_initialised_tick =
-                _next_initialised_tick(bitmap, integral, bit_position, self.buy);
+                _next_initialised_tick(bitmap, integral, bit_position, self.tick_spacing, self.buy);
 
             loop_current_tick = next_initialised_tick;
         }
@@ -239,19 +246,19 @@ impl<'a> SwapParams<'a> {
 
         let boundary_closed;
 
-        let tick_price = _tick_to_price(params.tick);
+        // let tick_price = _tick_to_price(params.tick);
 
         let equivalent =
-            |amount: Amount, buy: bool| -> Amount { _equivalent(amount, tick_price, buy) };
+            |amount: Amount, buy: bool| -> Amount { _equivalent(amount, params.tick, buy) };
 
         let mut tick_details = match self.ticks_details.get(&params.tick) {
             Some(res) => res,
             None => return (amount_out, amount_remaining, false),
         };
-        match tick_details.tick_state {
-            TickState::BUY => return (amount_out, amount_remaining, false),
-            TickState::SELL => {}
-        };
+
+        if let TickState::BUY = tick_details.tick_state {
+            return (amount_out, amount_remaining, false);
+        }
 
         let init_tick_liq = tick_details.liq_bounds._liquidity_within();
 
@@ -297,10 +304,10 @@ impl<'a> SwapParams<'a> {
 
         let boundary_closed;
 
-        let tick_price = _tick_to_price(params.tick);
+        //  let tick_price = _tick_to_price(params.tick);
 
         let equivalent =
-            |amount: Amount, buy: bool| -> Amount { _equivalent(amount, tick_price, buy) };
+            |amount: Amount, buy: bool| -> Amount { _equivalent(amount, params.tick, buy) };
 
         // tick details
         let mut tick_details = match self.ticks_details.get(&params.tick) {
@@ -308,10 +315,9 @@ impl<'a> SwapParams<'a> {
             None => return (amount_out, amount_remaining, false),
         };
 
-        match tick_details.tick_state {
-            TickState::SELL => return (amount_out, amount_remaining, false),
-            TickState::BUY => {}
-        };
+        if let TickState::SELL = tick_details.tick_state {
+            return (amount_out, amount_remaining, false);
+        }
 
         let init_tick_liq = tick_details.liq_bounds._liquidity_within();
 
@@ -337,3 +343,24 @@ impl<'a> SwapParams<'a> {
         return (amount_out, amount_remaining, boundary_closed);
     }
 }
+
+// #[test]
+// fn testing() {
+//     let tick = 10024_000;
+
+//     let price = _tick_to_price(tick);
+
+//     println!("{}", price);
+
+//     let amount = 103020000;
+
+//     let equiavlent = _equivalent(amount, price, false);
+
+//     println!("{}", equiavlent);
+
+//     let amount2 = _equivalent(equiavlent, price, true);
+
+//     println!("{}", amount2)
+
+//     // assert_eq!(amount, amount2)
+// }

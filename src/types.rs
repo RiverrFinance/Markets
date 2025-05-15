@@ -219,8 +219,12 @@ pub struct MarketDetails {
     ///
     /// The canister ID of the vault canister
     pub vault_id: Principal,
-
+    /// XRC ID
+    /// The
     pub xrc_id: Principal,
+    /// the magnitude in basis point unit between two tick ,in a tick_spacing of 1,the difference in magnitude between a tick and
+    /// its closest neighbour  tick is 1 basis point i.e (0.01%) whereas in a tick spacing of 100, the difference is 1%  
+    pub tick_spacing: u64,
 }
 
 impl Default for MarketDetails {
@@ -230,6 +234,7 @@ impl Default for MarketDetails {
             quote_asset: Asset::default(),
             vault_id: Principal::anonymous(),
             xrc_id: Principal::anonymous(),
+            tick_spacing: 0,
         };
     }
 }
@@ -253,10 +258,6 @@ impl Storable for MarketDetails {
 pub struct StateDetails {
     /// Determine if market is paused or not
     pub not_paused: bool,
-    /// Current Tick
-    ///
-    ///
-    pub current_tick: Tick,
     /// Max Leverage
     ///
     /// the maximum leverage allowed for any position * 10
@@ -271,11 +272,6 @@ pub struct StateDetails {
     ///
     /// -this amount  is actuallly  reduced by the reduction i.e (10::pow(token_decimal - 6))
     pub min_collateral: Amount,
-
-    /// Base Token Multiplier
-    ///
-    /// base token multiple for cases of perp_assets with lower value than the underlying collateral asset
-    pub base_token_multiple: u8,
 }
 
 impl Storable for StateDetails {

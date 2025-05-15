@@ -29,4 +29,4 @@ serde_cbor = "0.11.2"
 
 
 [dev-dependencies]
-pocket-ic = "6.0.0"
+pocket-ic = "9.0.0"

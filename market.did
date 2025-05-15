@@ -18,8 +18,8 @@ type MarketDetails = record {
   quote_asset : Asset;
   base_asset : Asset;
   xrc_id : principal;
+  tick_spacing : nat64;
 };
-type OrderType = variant { Limit; Market };
 type PositionOrderType = variant { Limit : LimitOrder; Market };
 type PositionParameters = record {
   owner : principal;
@@ -37,8 +37,6 @@ type Result = variant { Ok : PositionParameters; Err : text };
 type StateDetails = record {
   max_leveragex10 : nat8;
   not_paused : bool;
-  current_tick : nat64;
-  base_token_multiple : nat8;
   min_collateral : nat;
 };
 type TickDetails = record {
@@ -48,7 +46,8 @@ type TickDetails = record {
 };
 type TickState = variant { BUY; SELL };
 service : (MarketDetails) -> {
-  closePosition : (nat8, opt nat64) -> (nat);
+  closeLimitPosition : (nat8) -> (nat);
+  closeMarketPosition : (nat8, opt nat64) -> (nat);
   getAccountPositionDetails : (principal, nat8) -> (
       opt record { PositionParameters; PositionStatus; int64 },
     ) query;
@@ -57,16 +56,8 @@ service : (MarketDetails) -> {
   getStateDetails : () -> (StateDetails) query;
   getTickDetails : (nat64) -> (TickDetails) query;
   liquidatePosition : (principal, nat8) -> (bool);
-  openPosition : (
-      nat8,
-      nat,
-      bool,
-      OrderType,
-      nat8,
-      opt nat64,
-      nat64,
-      nat64,
-    ) -> (Result);
+  openLimitPosition : (nat8, bool, nat, nat8, opt nat64) -> (Result);
+  openMarketPosition : (nat8, bool, nat, nat8, opt nat64) -> (Result);
   retryAccountError : (blob) -> ();
   startTimer : () -> ();
   successNotification : (blob, nat64) -> ();

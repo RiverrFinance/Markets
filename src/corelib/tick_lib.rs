@@ -5,46 +5,47 @@ use super::constants::*;
 ///
 /// Gets the default max tick for a particular trade direction (buy or sell)
 ///
-/// This is currently implemented as a 5 percent incerase or decrease from the current tick
+/// This is currently implemented as a 0.5 percent incerase or decrease from the starting_tick
 
 pub fn _def_max_tick(current_tick: u64, buy: bool) -> u64 {
+    let delta = _percentage(50 * _ONE_BASIS_POINT, current_tick);
     if buy {
-        current_tick + _percentage(5 * _ONE_PERCENT, current_tick)
+        current_tick + delta
     } else {
-        current_tick - _percentage(5 * _ONE_PERCENT, current_tick)
+        current_tick - delta
     }
 }
 
 /// Next Default Tick       
 ///
 ///
-pub fn _next_default_tick(integral: u64, buy: bool) -> u64 {
+pub fn _next_default_tick(integral: u64, _tick_spacing: u64, buy: bool) -> u64 {
     if buy {
-        _tick_zero(integral + 1)
+        _tick_zero(integral + 1, _tick_spacing)
     } else {
-        _tick_zero(integral - 1) + (99 * _ONE_BASIS_POINT)
+        _tick_zero(integral - 1, _tick_spacing) + (99 * _tick_spacing)
     }
 }
 
 /// Tick Zero
 ///
 /// The tick zero of an integral corresponds to the tick with that integral  and a  of 0 i.e whole percentages (1%,3% etc)
-pub fn _tick_zero(integral: u64) -> u64 {
-    integral * _ONE_PERCENT
+pub fn _tick_zero(integral: u64, _tick_spacing: u64) -> u64 {
+    integral * (_ONE_PERCENT * _tick_spacing)
 }
 
 /// Mul and Bit
 ///
 /// This function is used to calculate the integral and decimal pert of a tick
 
-pub fn _int_and_dec(tick: u64) -> (u64, u64) {
-    let multiplier = tick / _ONE_PERCENT;
-    let bit_position = (tick % _ONE_PERCENT) / (_ONE_BASIS_POINT);
+pub fn _int_and_dec(tick: u64, _tick_spacing: u64) -> (u64, u64) {
+    let compressed = tick / _tick_spacing;
+    let multiplier = compressed / _ONE_PERCENT;
+    let bit_position = (compressed % _ONE_PERCENT) / (_ONE_BASIS_POINT);
     return (multiplier, bit_position);
 }
 
 /// Excceded Stopping Tick
-///
 /// This functions checks that stoping tick is not exceeded in the particular swap direction
 ///
 ///  
@@ -54,43 +55,5 @@ pub fn _exceeded_stopping_tick(current_tick: u64, stopping_tick: u64, buy: bool)
         return current_tick > stopping_tick;
     } else {
         return current_tick < stopping_tick;
-    }
-}
-
-/// Tick to Price
-///
-/// Calculates the price for a particular tick
-/// Price is given as the percentage of a base price
-
-pub fn _tick_to_price(tick: u64) -> u128 {
-    _percentage(tick, _BASE_PRICE)
-}
-
-#[cfg(test)]
-
-mod unit_test {
-
-    use super::*;
-    #[test]
-
-    fn test_mul_and_bit() {
-        let tick = 199_20_000;
-
-        println!(
-            "the number is {}",
-            0.0000000000000002 * (10 as u128).pow(20) as f64
-        );
-
-        let (mul, bit) = _int_and_dec(tick);
-
-        assert_eq!(mul, 199);
-        assert_eq!(bit, 20);
-
-        let tick2 = 199_200_000;
-
-        let (mul2, bit2) = _int_and_dec(tick2);
-
-        assert_eq!(mul2, 1992);
-        assert_eq!(bit2, 0);
     }
 }
