@@ -19,30 +19,33 @@ pub fn _def_max_tick(current_tick: u64, buy: bool) -> u64 {
 /// Next Default Tick       
 ///
 ///
-pub fn _next_default_tick(integral: u64, _tick_spacing: u64, buy: bool) -> u64 {
+pub fn _next_default_tick(integral: u64, buy: bool) -> u64 {
     if buy {
-        _tick_zero(integral + 1, _tick_spacing)
+        _tick_zero(integral + 1)
     } else {
-        _tick_zero(integral - 1, _tick_spacing) + (99 * _tick_spacing)
+        _tick_zero(integral - 1) + (99 * _ONE_BASIS_POINT)
     }
 }
 
 /// Tick Zero
 ///
 /// The tick zero of an integral corresponds to the tick with that integral  and a  of 0 i.e whole percentages (1%,3% etc)
-pub fn _tick_zero(integral: u64, _tick_spacing: u64) -> u64 {
-    integral * (_ONE_PERCENT * _tick_spacing)
+pub fn _tick_zero(integral: u64) -> u64 {
+    integral * (_ONE_PERCENT)
 }
 
 /// Mul and Bit
 ///
 /// This function is used to calculate the integral and decimal pert of a tick
 
-pub fn _int_and_dec(tick: u64, _tick_spacing: u64) -> (u64, u64) {
-    let compressed = tick / _tick_spacing;
-    let multiplier = compressed / _ONE_PERCENT;
-    let bit_position = (compressed % _ONE_PERCENT) / (_ONE_BASIS_POINT);
+pub fn _int_and_dec(tick: u64) -> (u64, u64) {
+    let multiplier = tick / _ONE_PERCENT;
+    let bit_position = (tick % _ONE_PERCENT) / (_ONE_BASIS_POINT);
     return (multiplier, bit_position);
+}
+
+pub fn _compressed_tick(tick: u64, tick_spacing: u64) -> u64 {
+    return tick / tick_spacing;
 }
 
 /// Excceded Stopping Tick

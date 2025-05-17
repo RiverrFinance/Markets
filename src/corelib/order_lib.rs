@@ -27,8 +27,6 @@ pub trait Order {
 ///OpenOrderParams for creating orders
 
 pub struct OpenOrderParams<'a> {
-       /// magnitude of difference in basis point between two neigbouring ticks
-    pub tick_spacing: u64,
     /// Multiplier BitMaps
     ///
     ///A HashMap of  multipliers (percentiles) to their respective bitmap
@@ -48,22 +46,19 @@ impl<'a> OpenOrderParams<'a> {
     ///
     /// creates an order at a particular tick
     pub fn open_order(&mut self) {
-        let mut tick_details = match self.ticks_details.get(&self.order.ref_tick) {
-            Some(details) => details,
-            None => {
-                let (integral, bit_position) = _int_and_dec(self.order.ref_tick, self.tick_spacing);
-                let map = match self.integrals_bitmaps.get(&integral) {
-                    Some(_map) => _map,
-                    None => 0,
-                };
+        let mut tick_details =
+            self.ticks_details
+                .get(&self.order.ref_tick)
+                .unwrap_or_else(|| -> TickDetails {
+                    let (integral, bit_position) = _int_and_dec(self.order.ref_tick);
+                    let map = self.integrals_bitmaps.get(&integral).unwrap_or_default();
 
-                let flipped_bitmap = _flip_bit(map, bit_position);
+                    let flipped_bitmap = _flip_bit(map, bit_position);
 
-                self.integrals_bitmaps.insert(integral, flipped_bitmap);
+                    self.integrals_bitmaps.insert(integral, flipped_bitmap);
 
-                TickDetails::new()
-            }
-        };
+                    TickDetails::new()
+                });
 
         self.order._opening_update(&mut tick_details);
         self.ticks_details.insert(self.order.ref_tick, tick_details);
@@ -73,8 +68,6 @@ impl<'a> OpenOrderParams<'a> {
 ///CloseOrderParams for closing order
 
 pub struct CloseOrderParams<'a> {
-    /// magnitude of difference in basis point between two neigbouring ticks
-    pub tick_spacing: u64,
     ///Order
     ///
     /// An immutable reference  to a  generic type order that implements the Order trait,
@@ -99,36 +92,30 @@ impl<'a> CloseOrderParams<'a> {
     /// Amount0 : Amount of token expected from the order
     /// Amount1 : Amount remaining in the order
     pub fn close_order(&mut self) -> (Amount, Amount) {
-        match self.ticks_details.get(&self.order.ref_tick) {
-            Some(mut tick_details) => {
-                let (amount0, amount1) = self.order._closing_update(&mut tick_details);
-
-                if tick_details.liq_bounds._liquidity_within() == 0 {
-                    self.ticks_details.remove(&self.order.ref_tick);
-
-                    let (integral, bit_position) =
-                        _int_and_dec(self.order.ref_tick, self.tick_spacing);
-
-                    if let Some(bitmap) = self.integrals_bitmaps.get(&integral) {
-                        let flipped_bitmap = _flip_bit(bitmap, bit_position);
-
-                        self.integrals_bitmaps.insert(integral, flipped_bitmap);
-                    }
-                } else {
-                    self.ticks_details.insert(self.order.ref_tick, tick_details);
-                }
-                return (amount0, amount1);
-            }
-            None => {
-                // if tick details does not exist means all trade order  that currently references that tick
-                //   has been filled
-                //  let tick_price = _tick_to_price(self.order.ref_tick);
-                return (
-                    _equivalent(self.order.order_size, self.order.ref_tick, self.order.buy),
-                    0,
-                );
-            }
+        let Some(mut tick_details) = self.ticks_details.get(&self.order.ref_tick) else {
+            // if tick details does not exist means all trade order  that currently references that tick
+            //   has been filled
+            return (
+                _equivalent(self.order.order_size, self.order.ref_tick, self.order.buy),
+                0,
+            );
         };
+        let (amount0, amount1) = self.order._closing_update(&mut tick_details);
+
+        if tick_details.liq_bounds._liquidity_within() == 0 {
+            self.ticks_details.remove(&self.order.ref_tick);
+
+            let (integral, bit_position) = _int_and_dec(self.order.ref_tick);
+
+            if let Some(bitmap) = self.integrals_bitmaps.get(&integral) {
+                let flipped_bitmap = _flip_bit(bitmap, bit_position);
+
+                self.integrals_bitmaps.insert(integral, flipped_bitmap);
+            }
+        } else {
+            self.ticks_details.insert(self.order.ref_tick, tick_details);
+        }
+        return (amount0, amount1);
     }
 }
 

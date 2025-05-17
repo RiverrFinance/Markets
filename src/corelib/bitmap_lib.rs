@@ -23,23 +23,16 @@ pub fn _flip_bit(bitmap: u128, bit_position: u64) -> u128 {
 /// Note
 ///  - This function returns the next default tick (see tick_lib) if no tick is initialised within the bitmap
 
-pub fn _next_initialised_tick(
-    bitmap: u128,
-    bit_position: u64,
-    integral: u64,
-    tick_spacing: u64,
-    buy: bool,
-) -> u64 {
+pub fn _next_initialised_tick(bitmap: u128, bit_position: u64, integral: u64, buy: bool) -> u64 {
     let reference = 99 - bit_position;
     if buy {
         let mask = ((1u128) << reference) - 1;
         let masked = bitmap & mask;
 
         if masked == 0 {
-            return _next_default_tick(integral, tick_spacing, true); // (integral + 1) * _ONE_PERCENT * tick_spacing;
+            return _next_default_tick(integral, true); // (integral + 1) * _ONE_PERCENT * tick_spacing;
         } else {
-            return (integral * _ONE_PERCENT)
-                + (_most_sigbit_position(masked) * _ONE_BASIS_POINT * tick_spacing);
+            return (integral * _ONE_PERCENT) + (_most_sigbit_position(masked) * _ONE_BASIS_POINT);
         }
     } else {
         let mask = !(((1u128) << (reference + 1)) - 1);
@@ -47,13 +40,12 @@ pub fn _next_initialised_tick(
 
         if masked == 0 {
             if bit_position == 0 {
-                return _next_default_tick(integral, tick_spacing, false);
+                return _next_default_tick(integral, false);
             }
 
-            return _tick_zero(integral, tick_spacing); // (integral - 1) * _ONE_PERCENT + (99 * _ONE_BASIS_POINT)
+            return _tick_zero(integral); // (integral - 1) * _ONE_PERCENT + (99 * _ONE_BASIS_POINT)
         } else {
-            return (integral * _ONE_PERCENT)
-                + (_least_sigbit_position(masked) * _ONE_BASIS_POINT * tick_spacing);
+            return (integral * _ONE_PERCENT) + (_least_sigbit_position(masked) * _ONE_BASIS_POINT);
         }
     }
 }

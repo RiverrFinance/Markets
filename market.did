@@ -8,11 +8,6 @@ type LimitOrder = record {
   order_size : nat;
   ref_tick : nat64;
 };
-type LiquidityBoundary = record {
-  upper_bound : nat;
-  lower_bound : nat;
-  lifetime_removed_liquidity : nat;
-};
 type MarketDetails = record {
   vault_id : principal;
   quote_asset : Asset;
@@ -39,12 +34,6 @@ type StateDetails = record {
   not_paused : bool;
   min_collateral : nat;
 };
-type TickDetails = record {
-  tick_state : TickState;
-  liq_bounds : LiquidityBoundary;
-  created_timestamp : nat64;
-};
-type TickState = variant { BUY; SELL };
 service : (MarketDetails) -> {
   closeLimitPosition : (nat8) -> (nat);
   closeMarketPosition : (nat8, opt nat64) -> (nat);
@@ -54,9 +43,8 @@ service : (MarketDetails) -> {
   getBestOffers : () -> (nat64, nat64) query;
   getMarketDetails : () -> (MarketDetails) query;
   getStateDetails : () -> (StateDetails) query;
-  getTickDetails : (nat64) -> (TickDetails) query;
   liquidatePosition : (principal, nat8) -> (bool);
-  openLimitPosition : (nat8, bool, nat, nat8, opt nat64) -> (Result);
+  openLimitPosition : (nat8, bool, nat, nat8, nat64) -> (Result);
   openMarketPosition : (nat8, bool, nat, nat8, opt nat64) -> (Result);
   retryAccountError : (blob) -> ();
   startTimer : () -> ();

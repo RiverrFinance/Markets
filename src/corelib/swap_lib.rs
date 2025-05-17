@@ -19,41 +19,33 @@ pub fn _get_best_offer<'a>(
     buy: bool,
     current_tick: Tick,
     stopping_tick: Tick,
-    tick_spacing: u64,
     integrals_bitmaps: &'a mut MB,
     ticks_details: &'a mut TD,
 ) -> Option<Tick> {
     let mut resulting_tick = 0;
     let mut loop_current_tick = current_tick;
     while !(_exceeded_stopping_tick(loop_current_tick, stopping_tick, buy)) {
-        let (integral, bit_position) = _int_and_dec(loop_current_tick, tick_spacing);
-        let bitmap = match integrals_bitmaps.get(&integral) {
-            Some(res) => res,
-            None => {
-                // if integral has no bitmap means that means  no tick within that integral   is
-                //initialised
+        let (integral, bit_position) = _int_and_dec(loop_current_tick);
+        let Some(bitmap) = integrals_bitmaps.get(&integral) else {
+            // if integral has no bitmap means that means  no tick within that integral   is
+            //initialised
 
-                // calculates the  next_default tick (See bitmap_lib)
-                // if next default tick exceeds stopping tick
-                //breaks else
-                // updates current tick to the next default tick
+            // calculates the  next_default tick (See bitmap_lib)
+            // if next default tick exceeds stopping tick
+            //breaks else
+            // updates current tick to the next default tick
 
-                let next_default_tick = _next_default_tick(integral, tick_spacing, buy);
+            let next_default_tick = _next_default_tick(integral, buy);
 
-                loop_current_tick = next_default_tick;
-                //stops currrent iteration,starts the next at the next default tick
-                continue;
-            }
+            loop_current_tick = next_default_tick;
+            //stops currrent iteration,starts the next at the next default tick
+            continue;
         };
-        let tick_details = match ticks_details.get(&loop_current_tick) {
-            Some(res) => res,
-            None => {
-                let next_initialised_tick =
-                    _next_initialised_tick(bitmap, bit_position, integral, tick_spacing, buy);
+        let Some(tick_details) = ticks_details.get(&loop_current_tick) else {
+            let next_initialised_tick = _next_initialised_tick(bitmap, bit_position, integral, buy);
 
-                loop_current_tick = next_initialised_tick;
-                continue;
-            }
+            loop_current_tick = next_initialised_tick;
+            continue;
         };
 
         // this checks that the swap is in the right direction
@@ -68,8 +60,7 @@ pub fn _get_best_offer<'a>(
             break;
         }
 
-        let next_initialised_tick =
-            _next_initialised_tick(bitmap, bit_position, integral, tick_spacing, buy);
+        let next_initialised_tick = _next_initialised_tick(bitmap, bit_position, integral, buy);
 
         loop_current_tick = next_initialised_tick;
     }
@@ -106,10 +97,7 @@ pub struct SwapParams<'a> {
     /// This can be viewed as maximum excecution price for a market order
     /// if specified swap does not exceed this and returns the net previous amount from ticks below and the amount remaining
     pub stopping_tick: Tick,
-    /// Tick Spacing
-    ///
-    /// magnitude of difference in basis point between two neigbouring ticks
-    pub tick_spacing: u64,
+
     /// Order Size
     ///
     /// the amount of asset being swapped
@@ -148,29 +136,25 @@ impl<'a> SwapParams<'a> {
         let mut loop_current_tick = self.init_tick;
 
         while !(_exceeded_stopping_tick(loop_current_tick, self.stopping_tick, self.buy)) {
-            let (integral, bit_position) = _int_and_dec(loop_current_tick, self.tick_spacing);
+            let (integral, bit_position) = _int_and_dec(loop_current_tick);
 
-            let bitmap = match self.integrals_bitmaps.get(&integral) {
-                Some(res) => res,
-                None => {
-                    // if integral has no bitmap means that means  no tick within that integral   is
-                    //initialised
+            let Some(bitmap) = self.integrals_bitmaps.get(&integral) else {
+                // if integral has no bitmap means that means  no tick within that integral   is
+                //initialised
 
-                    // calculates the  next_default tick (See bitmap_lib)
-                    // if next default tick exceeds stopping tick
-                    //breaks else
-                    // updates current tick to the next default tick
+                // calculates the  next_default tick (See bitmap_lib)
+                // if next default tick exceeds stopping tick
+                //breaks else
+                // updates current tick to the next default tick
 
-                    let next_default_tick =
-                        _next_default_tick(integral, self.tick_spacing, self.buy);
-                    if _exceeded_stopping_tick(next_default_tick, self.stopping_tick, self.buy) {
-                        break;
-                    };
+                let next_default_tick = _next_default_tick(integral, self.buy);
+                if _exceeded_stopping_tick(next_default_tick, self.stopping_tick, self.buy) {
+                    break;
+                };
 
-                    loop_current_tick = next_default_tick;
-                    //stops currrent iteration,starts the next at the next default tick
-                    continue;
-                }
+                loop_current_tick = next_default_tick;
+                //stops currrent iteration,starts the next at the next default tick
+                continue;
             };
 
             let tick_params = SwapTickConstants {
@@ -200,7 +184,7 @@ impl<'a> SwapParams<'a> {
 
                     let flipped_bitmap = _flip_bit(bitmap, bit_position);
 
-                    let tick_zero = _tick_zero(integral, self.tick_spacing);
+                    let tick_zero = _tick_zero(integral);
                     // if flipping bitmap results in zero and tick zero(see bitmap_lib) is not contained in ticks_details hashmap
                     //delete btimap
                     if flipped_bitmap == 0 && !self.ticks_details.contains_key(&tick_zero) {
@@ -218,7 +202,7 @@ impl<'a> SwapParams<'a> {
 
             //println!()
             let next_initialised_tick =
-                _next_initialised_tick(bitmap, bit_position, integral, self.tick_spacing, self.buy);
+                _next_initialised_tick(bitmap, bit_position, integral, self.buy);
 
             loop_current_tick = next_initialised_tick;
         }
@@ -249,9 +233,8 @@ impl<'a> SwapParams<'a> {
         let equivalent =
             |amount: Amount, buy: bool| -> Amount { _equivalent(amount, params.tick, buy) };
 
-        let mut tick_details = match self.ticks_details.get(&params.tick) {
-            Some(res) => res,
-            None => return (amount_out, amount_remaining, false),
+        let Some(mut tick_details) = self.ticks_details.get(&params.tick) else {
+            return (amount_out, amount_remaining, false);
         };
 
         if let TickState::BUY = tick_details.tick_state {
@@ -308,9 +291,8 @@ impl<'a> SwapParams<'a> {
             |amount: Amount, buy: bool| -> Amount { _equivalent(amount, params.tick, buy) };
 
         // tick details
-        let mut tick_details = match self.ticks_details.get(&params.tick) {
-            Some(res) => res,
-            None => return (amount_out, amount_remaining, false),
+        let Some(mut tick_details) = self.ticks_details.get(&params.tick) else {
+            return (amount_out, amount_remaining, false);
         };
 
         if let TickState::SELL = tick_details.tick_state {
