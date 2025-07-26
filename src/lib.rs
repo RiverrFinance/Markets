@@ -285,38 +285,39 @@ async fn open_limit_position(
             Ok(rate) => rate,
         };
 
-    let path = || -> Option<(PositionParameters, Vec<Tick>)> {
-        if long {
-            _open_limit_long_position(
-                account,
-                collateral_value,
-                debt_value,
-                interest_rate,
-                entry_tick,
-            )
-        } else {
-            _open_limit_short_position(
-                account,
-                collateral_value,
-                debt_value,
-                interest_rate,
-                entry_tick,
-            )
-        }
-    };
-
-    let Some((position, _)) = path() else {
-        vault.manage_position_update(
-            user,
-            account_index,
+    let result = if long {
+        _open_limit_long_position(
+            account,
             collateral_value,
-            ManageDebtParams::init(debt_value, debt_value, debt_value),
-        );
-
-        return Err("Failed to open position");
+            debt_value,
+            interest_rate,
+            entry_tick,
+        )
+    } else {
+        _open_limit_short_position(
+            account,
+            collateral_value,
+            debt_value,
+            interest_rate,
+            entry_tick,
+        )
     };
-    store_tick_order(max_tick, account);
-    return Ok(position);
+
+    match result {
+        Some((position, _)) => {
+            store_tick_order(entry_tick, account);
+            return Ok(position);
+        }
+        None => {
+            vault.manage_position_update(
+                user,
+                account_index,
+                collateral_value,
+                ManageDebtParams::init(debt_value, debt_value, debt_value),
+            );
+            return Err("Failed to open position at this price");
+        }
+    }
 }
 
 #[ic_cdk::update(name = "openMarketPosition")]
@@ -343,49 +344,53 @@ async fn open_market_position(
             Ok(rate) => rate,
         };
 
-    let path = || -> Option<(PositionParameters, Vec<Tick>)> {
-        if long {
-            _open_market_long_position(
-                account,
-                collateral_value,
-                debt_value,
-                interest_rate,
-                max_tick,
-            )
-        } else {
-            _open_market_short_position(
-                account,
-                collateral_value,
-                debt_value,
-                interest_rate,
-                max_tick,
-            )
-        }
-    };
-
-    let Some((position, crossed_ticks)) = path() else {
-        vault.manage_position_update(
-            user,
-            account_index,
+    let path = if long {
+        _open_market_long_position(
+            account,
             collateral_value,
-            ManageDebtParams::init(debt_value, debt_value, debt_value),
-        );
-
-        return Err("Failed to open position");
+            debt_value,
+            interest_rate,
+            max_tick,
+        )
+    } else {
+        _open_market_short_position(
+            account,
+            collateral_value,
+            debt_value,
+            interest_rate,
+            max_tick,
+        )
     };
 
-    _schedule_execution_for_ticks_orders(crossed_ticks);
+    match path {
+        Some((position, crossed_ticks)) => {
+            _schedule_execution_for_ticks_orders(crossed_ticks);
 
-    if position.debt_value != debt_value {
-        let un_used_collateral = collateral_value - position.collateral_value;
-        vault.manage_position_update(
-            user,
-            account_index,
-            un_used_collateral,
-            ManageDebtParams::init(debt_value, debt_value, debt_value - position.debt_value),
-        );
+            if position.debt_value != debt_value {
+                let un_used_collateral = collateral_value - position.collateral_value;
+                vault.manage_position_update(
+                    user,
+                    account_index,
+                    un_used_collateral,
+                    ManageDebtParams::init(
+                        debt_value,
+                        debt_value,
+                        debt_value - position.debt_value,
+                    ),
+                );
+            }
+            return Ok(position);
+        }
+        None => {
+            vault.manage_position_update(
+                user,
+                account_index,
+                collateral_value,
+                ManageDebtParams::init(debt_value, debt_value, debt_value),
+            );
+            return Err("Failed to open position");
+        }
     }
-    return Ok(position);
 }
 
 ///Close PositionDetails Functions
@@ -594,7 +599,7 @@ fn _open_limit_short_position(
         if active_lowest_sell_offer_tick.unwrap_or(_entry_tick) == _entry_tick {
             _update_lowest_sell_offer_tick(_entry_tick);
         }
-    }
+    };
 
     return Some((position, Vec::new()));
 }
@@ -642,8 +647,8 @@ fn _open_limit_long_position(
             _get_next_best_offer_tick(false, highest_buy_offer_tick, _entry_tick);
         if active_highest_buy_offer_tick.unwrap_or(_entry_tick) == _entry_tick {
             _update_highest_buy_offer_tick(_entry_tick);
-        }
-    }
+        };
+    };
 
     return Some((position, Vec::new()));
 }
@@ -1956,7 +1961,7 @@ impl Vault {
         debt: Amount,
     ) -> (bool, u32) {
         // return (true, 0);
-        let call = Call::bounded_wait(self.canister_id, "createPositionValidityCheck")
+        let call = Call::bounded_wait(self.canister_id, "liquidityChangeValidityCheck")
             .with_args(&(user, collateral, debt));
 
         if let Ok(response) = call.await {
