@@ -26,7 +26,3 @@ dfx deploy market --argument "(record {vault_id = principal \"${VAULT_ID}\";quot
 ```sh
 dfx canister call market updateStateDetails "(record {max_leveragex10 = 100; not_paused = true; min_collateral = 0})"  --network ic 
 ```
-
-```sh
-dfx canister uninstall-code market   --network ic
-```
